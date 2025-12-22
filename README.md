@@ -13,7 +13,7 @@ the application runs a real-time analysis loop
 
 ### 1. Installation
 Install the necessary Python libraries:
-`pip install matplotlib numpy pyserial`
+`pip install -r requirements.txt`
 
 ### 2. Running the Project
 `python src/main.py`
