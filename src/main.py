@@ -6,6 +6,7 @@ import os
 from PyQt5 import QtWidgets
 
 # Project Imports
+from utils import audio_feedback
 import utils.noise_filter as noise_filter
 import processing.signal_analyst as signal_analyst
 import reader.serial_reader as serial_reader  
@@ -25,6 +26,7 @@ def clean_models_if_needed():
             os.makedirs("models")
 
 def data_worker(data_queue, stop_event):
+    #  Hardware/Mock Initialization
     detected_port = None
     if not CONFIG["force_mock_mode"]:
         if CONFIG["serial_port"] != "AUTO":
@@ -41,19 +43,27 @@ def data_worker(data_queue, stop_event):
         mode = 'MOCK'
         source = mock_reader.MockReader(leaf_count=CONFIG['leaf_sensor_count'])
 
+    #  Filter & Model Initialization
     total = CONFIG["total_sensors"]
     window_size = CONFIG["filter_window_size"]
     
     filters = [noise_filter.MovingAverageFilter(window_size) for _ in range(total)]
     
-    # Initialize Analysts
     brains = []
     for i in range(total):
         if i == 0: s_id = "root"
         elif i == 1: s_id = "stem"
         else: s_id = f"leaf_{i-1}"
         brains.append(signal_analyst.SignalAnalyst(sensor_id=s_id))
+
+    # Audio Engine Initialization
+    audio_enabled = CONFIG.get("enable_audio", False)
+    synth = audio_feedback.AudioSynthesizer() 
     
+    if audio_enabled:
+        synth.start()
+    
+    #  Main Data Loop
     while not stop_event.is_set():
         if mode == 'SERIAL':
             t, voltages = serial_reader.read_line(source) 
@@ -71,6 +81,11 @@ def data_worker(data_queue, stop_event):
             processed_voltages.append(smooth_v)
             status = brains[i].update(smooth_v)
             sensor_statuses.append(status)
+        
+        # Audio Update 
+        if audio_enabled:
+            highest_activity = max(processed_voltages)
+            synth.update_voltage(highest_activity)
 
         packet = {
             'time': t, 
@@ -78,6 +93,11 @@ def data_worker(data_queue, stop_event):
             'statuses': sensor_statuses
         }
         data_queue.put(packet)
+    
+    # Cleanup
+    if audio_enabled:
+        synth.stop()
+
 
 def main():
     global CONFIG

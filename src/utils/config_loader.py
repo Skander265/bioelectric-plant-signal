@@ -10,7 +10,8 @@ DEFAULT_CONFIG = {
     "force_mock_mode": False,
     "serial_port": "AUTO",
     "filter_window_size": 5,
-    "force_retrain": False
+    "force_retrain": False,
+    "enable_audio": False  
 }
 
 def load_config(file_path=CONFIG_PATH):

@@ -74,7 +74,7 @@ class PlantBioLauncher(QtWidgets.QDialog):
 
         #1 Title/Welcome
         title = QtWidgets.QLabel("🌱 Botanical Intrusion Detector")
-        title.setStyleSheet("font-size: 24px; font-weight: bold; color: #00FF00; margin-bottom: 10px;")
+        title.setStyleSheet("font-size: 34px; font-weight: bold; color: #00FF00; margin-bottom: 10px;")
         title.setAlignment(QtCore.Qt.AlignCenter)
         layout.addWidget(title)
         
@@ -121,8 +121,15 @@ class PlantBioLauncher(QtWidgets.QDialog):
         self.smooth_spinner.setRange(1, 50)
         self.smooth_spinner.setValue(self.config['filter_window_size'])
         self.smooth_spinner.setStyleSheet("background-color: #444; color: white; padding: 5px;")
+
+        self.chk_audio = QtWidgets.QCheckBox("Enable Bio-Synth Audio")
+        self.chk_audio.setChecked(self.config.get('enable_audio', False))
+        self.chk_audio.setStyleSheet("font-size: 35px; color: #00FF00; spacing: 10px;")
+        self.chk_audio.setToolTip("Generates real-time audio based on plant voltage.")
         
         filter_layout.addRow("Smoothing Window:", self.smooth_spinner)
+        filter_layout.addRow(self.chk_audio)
+
         filter_group.setLayout(filter_layout)
         layout.addWidget(filter_group)
 
@@ -138,6 +145,7 @@ class PlantBioLauncher(QtWidgets.QDialog):
         self.config['leaf_sensor_count'] = self.leaf_spinner.value()
         self.config['filter_window_size'] = self.smooth_spinner.value()
         self.config['force_retrain'] = self.radio_train.isChecked()
+        self.config['enable_audio'] = self.chk_audio.isChecked()
         
         self.launch_approved = True
         self.accept() 

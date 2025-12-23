@@ -14,7 +14,7 @@ class PlantMonitorWindow(QtWidgets.QMainWindow):
         self.logger = logger.EventLogger()
         self.alarm_count = 0
 
-        self.setWindowTitle(f"Botanical Intrusion Detector ({self.leaf_count} Leaf Node Superposition)")
+        self.setWindowTitle(f"Botanical Intrusion Detector")
         self.resize(1000, 900)
         
         central_widget = QtWidgets.QWidget()
