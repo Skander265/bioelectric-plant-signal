@@ -1,100 +1,119 @@
 import threading
 import queue
-import time
-import matplotlib.pyplot as plt
+import sys
+import shutil 
+import os
+from PyQt5 import QtWidgets
 
-import plot.live_plot as live_plot
+# Project Imports
 import utils.noise_filter as noise_filter
 import processing.signal_analyst as signal_analyst
 import reader.serial_reader as serial_reader  
 import reader.mock_reader as mock_reader  
+import ui.gui_window as gui_window
+import utils.config_loader as config_loader
+import ui.launcher as launcher 
 
-#  WORKER THREAD 
+CONFIG = {}
+
+def clean_models_if_needed():
+    """If user requested a re-train, delete the old brains."""
+    if CONFIG.get("force_retrain", False):
+        if os.path.exists("models"):
+            print("🧹 PURGING OLD MODELS (Force Retrain Selected)...")
+            shutil.rmtree("models")
+            os.makedirs("models")
+
 def data_worker(data_queue, stop_event):
-    detected_port = serial_reader.find_available_port()
-    
+    detected_port = None
+    if not CONFIG["force_mock_mode"]:
+        if CONFIG["serial_port"] != "AUTO":
+             detected_port = CONFIG["serial_port"]
+        else:
+             detected_port = serial_reader.find_available_port()
+
     if detected_port:
-        print(f"Hardware Detected on {detected_port}. Starting SERIAL mode.")
+        print(f"Hardware found on {detected_port}")
         mode = 'SERIAL'
         source = serial_reader.connect_serial(detected_port)
     else:
-        print("No Hardware Found. Starting MOCK mode.")
+        print(f"Starting Mock Mode: 1 Root, 1 Stem, {CONFIG['leaf_sensor_count']} Leaves")
         mode = 'MOCK'
-        source = mock_reader.MockReader()
+        source = mock_reader.MockReader(leaf_count=CONFIG['leaf_sensor_count'])
 
-    filter_tool = noise_filter.MovingAverageFilter(window_size=5)
-    brain = signal_analyst.SignalAnalyst()
+    total = CONFIG["total_sensors"]
+    window_size = CONFIG["filter_window_size"]
     
-    print("Worker thread active...")
-
+    filters = [noise_filter.MovingAverageFilter(window_size) for _ in range(total)]
+    
+    # Initialize Analysts
+    brains = []
+    for i in range(total):
+        if i == 0: s_id = "root"
+        elif i == 1: s_id = "stem"
+        else: s_id = f"leaf_{i-1}"
+        brains.append(signal_analyst.SignalAnalyst(sensor_id=s_id))
+    
     while not stop_event.is_set():
-        # Read Data based on mode
         if mode == 'SERIAL':
-            t, v = serial_reader.read_line(source)
+            t, voltages = serial_reader.read_line(source) 
         else:
-            t, v = source.read_line()
+            t, voltages = source.read_line()
 
-        if v is None: 
-            time.sleep(0.001) # Prevent CPU spiking on empty reads
+        if not voltages or len(voltages) != total: 
             continue
+            
+        processed_voltages = []
+        sensor_statuses = []
 
-        # Process Data
-        smooth_v = filter_tool.apply(v)
-        status = brain.update(smooth_v)
+        for i in range(total):
+            smooth_v = filters[i].apply(voltages[i])
+            processed_voltages.append(smooth_v)
+            status = brains[i].update(smooth_v)
+            sensor_statuses.append(status)
 
-        # Send to GUI
         packet = {
             'time': t, 
-            'voltage': smooth_v, 
-            'status': status
+            'voltages': processed_voltages, 
+            'statuses': sensor_statuses
         }
         data_queue.put(packet)
 
 def main():
-    fig, ax, line, x_data, y_data = live_plot.setup_plot()
+    global CONFIG
     
-    # Setup Threading
-    data_queue = queue.Queue()
-    stop_event = threading.Event()
+    app = QtWidgets.QApplication(sys.argv)
+    
+    current_config = config_loader.load_config()
+    
+    launch_dialog = launcher.PlantBioLauncher(current_config)
+    if launch_dialog.exec_() == QtWidgets.QDialog.Accepted:
+        
+        CONFIG = launch_dialog.config
+        CONFIG = config_loader.calculate_derived(CONFIG) # Recalculate totals
+        config_loader.save_config(CONFIG)
+        
+        clean_models_if_needed()
 
-    worker = threading.Thread(target=data_worker, args=(data_queue, stop_event))
-    worker.daemon = True 
-    worker.start()
+        data_queue = queue.Queue()
+        stop_event = threading.Event()
 
-    print(f"Starting Plant Security System...")
-    alarm_count = 0
+        worker = threading.Thread(target=data_worker, args=(data_queue, stop_event))
+        worker.daemon = True 
+        worker.start()
 
-    try:
-        while True:
-            while not data_queue.empty():
-                packet = data_queue.get()
-                t = packet['time']
-                v = packet['voltage']
-                status = packet['status']
-
-                # Update Graph
-                live_plot.update_plot(fig, ax, line, x_data, y_data, t, v)
-                
-                # Update Status / Security System
-                if "ACTION: INTRUDER_ALARM" in status:
-                    ax.set_title(f"SECURITY ALERT TRIGGERED!", color='red', fontsize=14, fontweight='bold')
-                    alarm_count += 1
-                    print(f"ALARM! Voltage: {v:.2f}V | Total Events: {alarm_count}")
-                    
-                elif "REJECTED" in status:
-                    ax.set_title(f"Filtered: {status}", color='orange', fontsize=10)
-                elif "IGNORE" in status:
-                    ax.set_title("Status: Environment Noise Ignored", color='gray')
-                elif "Scanning" in status:
-                    if "ALERT" not in ax.get_title():
-                        ax.set_title(f"System Armed. Intrusions: {alarm_count}", color='green')
-
-            plt.pause(0.05) 
-
-    except KeyboardInterrupt:
-        print("\nStopping...")
-        stop_event.set()
-        worker.join()
+        window = gui_window.PlantMonitorWindow(
+            data_queue, 
+            stop_event, 
+            leaf_count=CONFIG["leaf_sensor_count"], 
+            total_sensors=CONFIG["total_sensors"]
+        )
+        window.show()
+        
+        sys.exit(app.exec_())
+    else:
+        print("Launcher canceled. Exiting.")
+        sys.exit(0)
 
 if __name__ == "__main__":
     main()

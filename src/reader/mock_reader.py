@@ -3,34 +3,44 @@ import numpy as np
 import random
 
 class MockReader:
-    def __init__(self):
+    def __init__(self, leaf_count=3):
+        self.leaf_count = leaf_count
         self.start_time = int(time.time() * 1000)
         self.tick = 0
+        
+        # state variables to hold the spike
+        self.spike_frames_left = 0
+        self.spike_target = None
+        self.spike_leaf_index = 0
 
     def read_line(self):
-        voltage = np.random.normal(0.5, 0.05)
-        
-        if self.tick % 50 == 0 and random.random() > 0.7:
-            event_type = random.choice(['spike', 'wobble'])
-            self.inject_event(event_type)
+        #base Noise
+        root = np.random.normal(0.5, 0.1)
+        stem = np.random.normal(0.5, 0.02)
+        leaves = list(np.random.normal(0.5, 0.05, self.leaf_count))
 
-        if hasattr(self, 'active_event') and len(self.active_event) > 0:
-            voltage += self.active_event.pop(0)
+        #trigger logic to start new spikes
+        if self.spike_frames_left == 0 and self.tick % 250 == 0 and random.random() > 0.5:
+            self.spike_frames_left = 10  #hold spike for 10 frames (thicker signal)
+            self.spike_target = random.choice(['root', 'stem', 'leaf'])
+            self.spike_leaf_index = random.randint(0, self.leaf_count - 1)
+
+        if self.spike_frames_left > 0:
+            spike_voltage = 4.0
+            
+            if self.spike_target == 'root':
+                root += spike_voltage
+            elif self.spike_target == 'stem':
+                stem += spike_voltage
+            else:
+                leaves[self.spike_leaf_index] += spike_voltage
+            
+            self.spike_frames_left -= 1
 
         self.tick += 1
-        time.sleep(0.05) # Simulate hardware delay
+        time.sleep(0.02)
         
         current_time = int(time.time() * 1000) - self.start_time
-        return current_time, voltage
-
-    def inject_event(self, type):
-        if type == 'spike':
-            # Create a sharp triangle wave (Touch)
-            # Goes up fast, comes down fast. High amplitude.
-            self.active_event = list(np.concatenate([np.linspace(0, 3.0, 5), np.linspace(3.0, 0, 10)]))
+        full_sensor_list = [root, stem] + leaves
         
-        elif type == 'wobble':
-            # Create a slow sine wave (Wind/Noise)
-            # Lower amplitude, lasts longer.
-            x = np.linspace(0, 4*np.pi, 40)
-            self.active_event = list(np.sin(x) * 0.8)
+        return current_time, full_sensor_list
