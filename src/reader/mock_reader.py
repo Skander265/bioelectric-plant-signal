@@ -8,22 +8,34 @@ class MockReader:
         self.start_time = int(time.time() * 1000)
         self.tick = 0
         
-        # state variables to hold the spike
+        # tate variables to hold the spike
         self.spike_frames_left = 0
         self.spike_target = None
         self.spike_leaf_index = 0
 
     def read_line(self):
-        #base Noise
+        # 1. Base Noise
         root = np.random.normal(0.5, 0.1)
         stem = np.random.normal(0.5, 0.02)
         leaves = list(np.random.normal(0.5, 0.05, self.leaf_count))
 
-        #trigger logic to start new spikes
-        if self.spike_frames_left == 0 and self.tick % 250 == 0 and random.random() > 0.5:
-            self.spike_frames_left = 10  #hold spike for 10 frames (thicker signal)
-            self.spike_target = random.choice(['root', 'stem', 'leaf'])
-            self.spike_leaf_index = random.randint(0, self.leaf_count - 1)
+        #TRIGGER LOGIC
+        if self.spike_frames_left == 0 and self.tick % 100 == 0:
+            
+            # 70% chance to spike whenever check
+            if random.random() > 0.3:
+                self.spike_frames_left = 10  # Hold for 0.2s
+                
+                # WEIGHTED CHOICE: 80% chance for Leaf, 10% Root, 10% Stem
+                rand_val = random.random()
+                if rand_val < 0.1:
+                    self.spike_target = 'root'
+                elif rand_val < 0.2:
+                    self.spike_target = 'stem'
+                else:
+                    self.spike_target = 'leaf'
+                
+                self.spike_leaf_index = random.randint(0, self.leaf_count - 1)
 
         if self.spike_frames_left > 0:
             spike_voltage = 4.0

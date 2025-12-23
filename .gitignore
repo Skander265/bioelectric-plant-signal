@@ -21,3 +21,12 @@ data/*.csv
 # OS-generated files
 .DS_Store
 Thumbs.db
+
+# Ignore compiled models
+models/
+*.pkl
+
+# Ignore Logs
+log/
+*.csv
+
