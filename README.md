@@ -27,7 +27,7 @@ The application is built on a modular pipeline designed for low-latency signal p
 
 ## Key Features
 
-* Neural Calibration: The system spends the first 15 seconds "learning" the plant's normal electrical activity. It adapts to the specific noise floor of your environment automatically.
+* Neural Calibration: The system spends time "learning" the plant's normal electrical activity. It adapts to the specific noise floor of your environment automatically.
 * Auditory Feedback: Enable "Bio-Synth" to hear the plant's nervous system. Pitch modulates based on the highest voltage detected in the network.
 * Dataset Training: Import your own .csv files to train the detection models on pre-recorded events.
 
